@@ -1,9 +1,9 @@
 import streamlit as st
 import numpy as np
-from empiricaldist import Pmf
+import pandas as pd
 from scipy.stats import binom
-#import matplotlib.pyplot as plt
-#from collections import Counter
+from collections import Counter
+import copy
 
 st.set_page_config(
   page_title='WhoWin',
@@ -14,28 +14,49 @@ st.set_page_config(
 #  #st.session_state.uwsensitivity = float(osensitivity)
 #  st.session_state.ufsubmit_triggered = True
 
+class cPmf():
+  def __init__(self, vkeys, vvalues):
+    self.df = pd.DataFrame({
+      "probs": vvalues
+    }, index=vkeys)
+    
+  def M_normalize(self):
+    #self.df["prob"] = self.df["prob"] / self.df["prob"].sum()
+    self.df = self.df / self.df.sum()
+
+
+class cHistogram_from_Seq():
+  def __init__(self, npv):
+    ofrequency = Counter(npv)
+    self.df = pd.DataFrame(ofrequency.items(), columns=["item", "frequency"])
+    self.df["probs"] = self.df["frequency"] / self.df["frequency"].sum()
+
+
 class cConfig():
   uwtcntcolumn = 4 # 한화면에 컬럼 개수
   
   
 class c톰슨샘플링():
-  
   def __init__(self, uwtcntmachine):
-    self.vanalysis_machine = []
-    self.vanalysis_WL = []
-
-    vkeys = npxs = np.linspace(0, 1, 101)
-    vvalues = [1]*len(vkeys)
-    self.opmfprior = Pmf(dict(zip(vkeys, vvalues)))
-    self.opmfprior.normalize()
+    npxs = np.linspace(0, 1, 101)
     self.diclikelihood = {
         'W': npxs,
         'L': 1-npxs
     }
-    self.vopmfbeliefs = [self.opmfprior.copy() for i in range(uwtcntmachine)]
+    self.vanalysis_machine = []
+    self.vanalysis_WL = []
 
+    vkeys = np.linspace(0, 1, 101)
+    vvalues = [1]*len(vkeys)
+    opmfprior = cPmf(vkeys, vvalues)
+    opmfprior.M_normalize()
+    self.vopmfbeliefs = [copy.deepcopy(opmfprior) for i in range(uwtcntmachine)]
+
+  def Md_random_choice_from_pmf_basedon_distribution(self, opmf):
+    return float(np.random.choice(opmf.df.index, p=opmf.df['probs']))
+  
   def Mw_choose(self):
-    vps = [b.choice() for b in self.vopmfbeliefs]
+    vps = [self.Md_random_choice_from_pmf_basedon_distribution(opmf) for opmf in self.vopmfbeliefs]
     uwidmachine = np.argmax(vps)
     return uwidmachine
 
@@ -50,8 +71,9 @@ class c톰슨샘플링():
     
   def M_update(self, uidmachine, usWL):
     opmf = self.vopmfbeliefs[uidmachine]
-    opmf *= self.diclikelihood[usWL]
-    opmf.normalize()
+    opmf.df['probs'] *= self.diclikelihood[usWL]
+    opmf.M_normalize()
+
 initial_vpokemons = [
     {
         "name": "피카츄",
@@ -212,10 +234,10 @@ if st.session_state.change_triggered:
 st.subheader('게임 시작')
 st.text("""머신을 다른 사람이 하는 것을 보면서 W/L을 입력한다. 나도 하면서 W/L을 입력한다.
             * p<.05이면 95%< 신뢰
-            * 전략1 & p<.05 & .5<Wratio => L에배팅
-            * 전략1 & p<.05 & .5<Lratio => W에배팅
-            * 전략2 & p<.05 & .5<Wratio => W에배팅 
-            * 전략2 & p<.05 & .5<Lratio => L에배팅
+            * 전략1 & p<.05 & .5<Wratio => L에베팅
+            * 전략1 & p<.05 & .5<Lratio => W에베팅
+            * 전략2 & p<.05 & .5<Wratio => W에베팅 
+            * 전략2 & p<.05 & .5<Lratio => L에베팅
         """)
 
 for i in range(0, st.session_state.uwtcntmachine, cConfig.uwtcntcolumn):
@@ -269,26 +291,17 @@ for i in range(0, st.session_state.uwtcntmachine, cConfig.uwtcntcolumn):
               """)
       if 60 < st.session_state.uwsensitivity: # 승패에 예민한 사람
         if udp20 < .05 and 0.55 < udwratio:
-          st.text('V전략1이라면 L에 배팅하세요')
+          st.text('V전략1이면 L에 베팅하세요')
         if udp20 < .05 and 0.55 < udlratio:
-          st.text('V전략1이라면 W에 배팅하세요')
+          st.text('V전략1이면 W에 베팅하세요')
 
-        if udp20 < .05 and 0.55 < udwratio:
-          st.text('V전략2이라면 W에 배팅하세요')
-        if udp20 < .05 and 0.55 < udlratio:
-          st.text('V전략2이라면 L에 배팅하세요')
+      if 60 >= st.session_state.uwsensitivity: # 승패보단 많이 해보고 싶은 사람
+        if udp20 < .1 and 0.55 < udwratio:
+          st.text('V전략1이면 L에 베팅하세요')
+        if udp20 < .1 and 0.55 < udlratio:
+          st.text('V전략1이면 W에 베팅하세요')
           
-      else: # 승패보단 많이 해보고 싶은 사람
-        if udp20 < .1 and 0.55 < udwratio:
-          st.text('V전략1이라면 L에 배팅하세요')
-        if udp20 < .1 and 0.55 < udlratio:
-          st.text('V전략1이라면 W에 배팅하세요')
-
-        if udp20 < .1 and 0.55 < udwratio:
-          st.text('V전략2이라면 W에 배팅하세요')
-        if udp20 < .1 and 0.55 < udlratio:
-          st.text('V전략2이라면 L에 배팅하세요')
-
+      st.text("-----------")
 
       uwbettingupperboound = st.session_state.uwbettingupperboound
       uwtcntbetting = st.session_state.uwtcntbetting
@@ -297,25 +310,39 @@ for i in range(0, st.session_state.uwtcntmachine, cConfig.uwtcntcolumn):
       st.text(f"""연속성기준
       연속횟수: {uwconsecutiveWL}
       연속확률: {udpconsecutiveWL:.3}
-      이보다작으면배팅: {1.0/float(uwbettingupperboound):.4}""")
+      이보다작으면베팅: {1.0/float(uwbettingupperboound):.4}""")
       if udpconsecutiveWL < 1.0/float(uwbettingupperboound):
         if pokemon["usjustbeforeWL"] == "W":
-          st.text("V전략1 일시 L에 배팅")
+          st.text("V전략1이면 L에 베팅")
         else:
-          st.text("V전략1 일시 W에 배팅")
+          st.text("V전략1이면 W에 베팅")
+
+      st.text("-----------")
+
+      if 60 < st.session_state.uwsensitivity: # 승패에 예민한 사람
+        if udp20 < .05 and 0.55 < udwratio:
+          st.text('V전략2이면 W에 베팅하세요')
+        if udp20 < .05 and 0.55 < udlratio:
+          st.text('V전략2이면 L에 베팅하세요')
           
+      if 60 >= st.session_state.uwsensitivity: # 승패보단 많이 해보고 싶은 사람
+        if udp20 < .1 and 0.55 < udwratio:
+          st.text('V전략2이면 W에 베팅하세요')
+        if udp20 < .1 and 0.55 < udlratio:
+          st.text('V전략2이면 L에 베팅하세요')
 
 
+st.text("-------------------------------------------------------")
 uidnextbettingmachine = st.session_state.ot.Mw_choose()
-st.text(f'전략2일 것 같은데 적당히 이익극대화를 하고 싶다면 다음에 배팅할 기계는(If you want to maximize your profits with Strategy 2, the next machine to bet on is): machine {uidnextbettingmachine}')
+st.text(f'전략2일 것 같은데 적당히 이익극대화를 하고 싶다면 다음에 베팅할 기계는(If you want to maximize your profits with Strategy 2, the next machine to bet on is): machine {uidnextbettingmachine}')
 st.text('어느 기계에 더 많이 베팅했지(Which machine has been used)?')
-df1 = Pmf.from_seq(st.session_state.ot.vanalysis_machine)
-df1.columns = ['machineid','W per machine']
-st.table(df1)
+df1 = cHistogram_from_Seq(st.session_state.ot.vanalysis_machine).df
+#df1.columns = ['machineid','W per machine']
+st.table(df1.reset_index(drop=True))
 st.text('내가 전반적으로 잘하고 있나(Am I doing well in general)?')
-df2 = Pmf.from_seq(st.session_state.ot.vanalysis_WL)
-df2.columns = ['WL','Total ratio']
-st.table(df2)
+df2 = cHistogram_from_Seq(st.session_state.ot.vanalysis_WL).df
+#df2.columns = ['WL','Total ratio']
+st.table(df2.reset_index(drop=True))
 
 #with st.expander(label='검증해 보기', expanded=True):
 #  st.subheader('검증')
