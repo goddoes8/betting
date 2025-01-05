@@ -24,6 +24,8 @@ class cPmf():
     #self.df["prob"] = self.df["prob"] / self.df["prob"].sum()
     self.df = self.df / self.df.sum()
 
+  def M_deepcopy(self):
+    return copy.deepcopy(self)
 
 class cHistogram_from_Seq():
   def __init__(self, npv):
@@ -50,7 +52,7 @@ class c톰슨샘플링():
     vvalues = [1]*len(vkeys)
     opmfprior = cPmf(vkeys, vvalues)
     opmfprior.M_normalize()
-    self.vopmfbeliefs = [copy.deepcopy(opmfprior) for i in range(uwtcntmachine)]
+    self.vopmfbeliefs = [opmfprior.M_deepcopy() for i in range(uwtcntmachine)]
 
   def Md_random_choice_from_pmf_basedon_distribution(self, opmf):
     return float(np.random.choice(opmf.df.index, p=opmf.df['probs']))
@@ -159,7 +161,7 @@ if "uffirst" not in st.session_state:
   }
   
 initial_uwtcntmachine = 4 # 시도할 갬블링 대수 
-initial_uwsensitivity = 60
+initial_uwsensitivity = 10 # 5 로하는 것이 적당함 
 initial_uwbettingupperboound = 20
 
 st.title('후윈(WHOWIN)')
@@ -200,9 +202,10 @@ with cols001[1]:
   
 cols002 = st.columns([2, 1])  # col1은 좁고 col2는 넓게 설정
 with cols002[0]:
-  st.markdown("**꼭 돈을 따려면 높여라** (If you want to make money, raise it):")  # 텍스트 레이블 (기울임 효과)
+  st.markdown("**승률 업, 빈도 로 면 재현율을 낮춰라** (If you want to make money for sure, lower it):")  # 텍스트 레이블 (기울임 효과)
 with cols002[1]:
-  osensitivity = st.select_slider("",options=["55","60","70","80","90","95",],value=str(st.session_state.uwsensitivity), on_change=on_slider_change_sensitivity, label_visibility="visible")
+  #osensitivity = st.select_slider("",options=["55","60","70","80","90","95",],value=str(st.session_state.uwsensitivity), on_change=on_slider_change_sensitivity, label_visibility="visible")
+  osensitivity = st.select_slider("",options=["20%","15%","10%","5%","1%",],value=str(st.session_state.uwsensitivity)+'%', on_change=on_slider_change_sensitivity, label_visibility="visible")
 
 cols003 = st.columns([2, 1])  # col1은 좁고 col2는 넓게 설정
 with cols003[0]:
@@ -216,7 +219,7 @@ with cols003[1]:
 #if submit or st.session_state.submit_triggered:
 if st.session_state.submit_triggered:
   st.session_state.uwtcntmachine = int(otcntmachine)
-  st.session_state.uwsensitivity = int(osensitivity)
+  st.session_state.uwsensitivity = int(osensitivity[:-1])
   st.session_state.uwbettingupperboound = int(obettingupperboound)  
   st.session_state.submit_triggered = False
   st.session_state.vpokemons = initial_vpokemons  
@@ -225,20 +228,14 @@ if st.session_state.submit_triggered:
   st.rerun()
 
 if st.session_state.change_triggered:
-  st.session_state.uwsensitivity = int(osensitivity)
+  st.session_state.uwsensitivity = int(osensitivity[:-1])
   st.session_state.uwbettingupperboound = int(obettingupperboound)  
   st.session_state.change_triggered = False  # 값 변경 시
   st.rerun()
 
   
-st.subheader('게임 시작')
-st.text("""머신을 다른 사람이 하는 것을 보면서 W/L을 입력한다. 나도 하면서 W/L을 입력한다.
-            * p<.05이면 95%< 신뢰
-            * 전략1 & p<.05 & .5<Wratio => L에베팅
-            * 전략1 & p<.05 & .5<Lratio => W에베팅
-            * 전략2 & p<.05 & .5<Wratio => W에베팅 
-            * 전략2 & p<.05 & .5<Lratio => L에베팅
-        """)
+st.subheader('게임 시작(Game Start)')
+st.text("머신을 다른 사람이 하는 것을 보면서 W/L을 클릭릭한다. 나도 하면서 W/L을 입력한다.")
 
 for i in range(0, st.session_state.uwtcntmachine, cConfig.uwtcntcolumn):
   vrow_pokemons = st.session_state.vpokemons[i:min(i+cConfig.uwtcntcolumn, st.session_state.uwtcntmachine)]
@@ -289,18 +286,11 @@ for i in range(0, st.session_state.uwtcntmachine, cConfig.uwtcntcolumn):
               Lratio: {udlratio:.3f}
               p-value: {udp20:.3f}
               """)
-      if 60 < st.session_state.uwsensitivity: # 승패에 예민한 사람
-        if udp20 < .05 and 0.55 < udwratio:
-          st.text('V전략1이면 L에 베팅하세요')
-        if udp20 < .05 and 0.55 < udlratio:
-          st.text('V전략1이면 W에 베팅하세요')
+      if udp20 < st.session_state.uwsensitivity/100 and 0.55 < udwratio:
+        st.markdown("**V전략1이면 L에 베팅**")
+      if udp20 < st.session_state.uwsensitivity/100 and 0.55 < udlratio:
+        st.markdown("**V전략1이면 W에 베팅**")
 
-      if 60 >= st.session_state.uwsensitivity: # 승패보단 많이 해보고 싶은 사람
-        if udp20 < .1 and 0.55 < udwratio:
-          st.text('V전략1이면 L에 베팅하세요')
-        if udp20 < .1 and 0.55 < udlratio:
-          st.text('V전략1이면 W에 베팅하세요')
-          
       st.text("-----------")
 
       uwbettingupperboound = st.session_state.uwbettingupperboound
@@ -313,29 +303,21 @@ for i in range(0, st.session_state.uwtcntmachine, cConfig.uwtcntcolumn):
       이보다작으면베팅: {1.0/float(uwbettingupperboound):.4}""")
       if udpconsecutiveWL < 1.0/float(uwbettingupperboound):
         if pokemon["usjustbeforeWL"] == "W":
-          st.text("V전략1이면 L에 베팅")
+          st.markdown("**V전략1이면 L에 베팅**")
         else:
-          st.text("V전략1이면 W에 베팅")
+          st.markdown("**V전략1이면 W에 베팅**")
 
       st.text("-----------")
 
-      if 60 < st.session_state.uwsensitivity: # 승패에 예민한 사람
-        if udp20 < .05 and 0.55 < udwratio:
-          st.text('V전략2이면 W에 베팅하세요')
-        if udp20 < .05 and 0.55 < udlratio:
-          st.text('V전략2이면 L에 베팅하세요')
+      if udp20 < st.session_state.uwsensitivity/100 and 0.55 < udwratio:
+        st.markdown("**V전략2이면 W에 베팅**")
+      if udp20 < st.session_state.uwsensitivity/100 and 0.55 < udlratio:
+        st.markdown("**V전략2이면 L에 베팅**")
           
-      if 60 >= st.session_state.uwsensitivity: # 승패보단 많이 해보고 싶은 사람
-        if udp20 < .1 and 0.55 < udwratio:
-          st.text('V전략2이면 W에 베팅하세요')
-        if udp20 < .1 and 0.55 < udlratio:
-          st.text('V전략2이면 L에 베팅하세요')
-
-
 st.text("-------------------------------------------------------")
 uidnextbettingmachine = st.session_state.ot.Mw_choose()
-st.text(f'전략2일 것 같은데 적당히 이익극대화를 하고 싶다면 다음에 베팅할 기계는(If you want to maximize your profits with Strategy 2, the next machine to bet on is): machine {uidnextbettingmachine}')
-st.text('어느 기계에 더 많이 베팅했지(Which machine has been used)?')
+st.markdown(f"전략2일 것 같은데 적당히 이익극대화를 하고 싶다면 다음에 베팅할 기계는(If you want to maximize your profits with Strategy 2, the next machine to bet on is): **machine {uidnextbettingmachine}**  \n 아래 자료를 보면 게임을 하면 할수록 기계 추천이 정확해짐을 알게됨")
+st.text("어느 기계에 더 많이 베팅했지(Which machine has been used)?")
 df1 = cHistogram_from_Seq(st.session_state.ot.vanalysis_machine).df
 #df1.columns = ['machineid','W per machine']
 st.table(df1.reset_index(drop=True))
@@ -343,6 +325,15 @@ st.text('내가 전반적으로 잘하고 있나(Am I doing well in general)?')
 df2 = cHistogram_from_Seq(st.session_state.ot.vanalysis_WL).df
 #df2.columns = ['WL','Total ratio']
 st.table(df2.reset_index(drop=True))
+
+#"""
+#--------------------이하참고정보-----------------------
+#            * p<.05이면 95%< 신뢰
+#            * 전략1 & p<.05 & .5<Wratio => L에베팅
+#            * 전략1 & p<.05 & .5<Lratio => W에베팅
+#            * 전략2 & p<.05 & .5<Wratio => W에베팅 
+#            * 전략2 & p<.05 & .5<Lratio => L에베팅
+#"""
 
 #with st.expander(label='검증해 보기', expanded=True):
 #  st.subheader('검증')
